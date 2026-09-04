@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Songs{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="am-title">Songs</h1>
+      <div class="am-subtitle mt-1">{{ total_songs }} song{{ '' if total_songs == 1 else 's' }} &middot; {{ takes_week }} take{{ '' if takes_week == 1 else 's' }} this week</div>
+    </div>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('upload') }}">Upload</a>
+  </div>
+
+  {% if not songs %}
+    <div class="card">
+      <div class="card-body text-center py-5">
+        <p class="text-secondary mb-3">No songs yet.</p>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('upload') }}">Upload one</a>
+      </div>
+    </div>
+  {% else %}
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <div class="seg" role="group" aria-label="Filter by part">
+        <button type="button" class="btn btn-sm btn-outline-secondary filter-btn active" data-filter="all">All</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary filter-btn" data-filter="vocals">Vocals</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary filter-btn" data-filter="guitar">Guitar</button>
+      </div>
+      <div class="search-wrap ms-auto">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M11.74 10.34a5.5 5.5 0 1 0-.7.7l3.13 3.13a.5.5 0 0 0 .7-.7l-3.13-3.13zm-5.24.16a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+        <input id="song-search" class="form-control form-control-sm" placeholder="Search" aria-label="Search songs">
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 track-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th class="d-none d-md-table-cell">Part</th>
+            <th class="d-none d-lg-table-cell">Added</th>
+            <th class="d-none d-sm-table-cell text-center">Takes</th>
+            <th class="text-end">Best</th>
+            <th><span class="visually-hidden">Action</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in songs %}
+            <tr class="song-row"
+                data-song="{{ s.id }}"
+                data-status="{{ s.status }}"
+                data-coaching="{{ s.coaching_type }}"
+                data-title="{{ s.title|lower }}">
+              <td>
+                <div class="d-flex align-items-center gap-3">
+                  <a class="am-art-link" href="{{ url_for('song_detail', song_id=s.id) }}" aria-label="{{ s.title }}">
+                    <span class="am-art">
+                      <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M9 1.5v8.44a3.5 3.5 0 1 0 2 3.16V7.4l3-1.28V3.1L9 5.28V1.5a.5.5 0 0 0-1 0v.46a.5.5 0 0 0 1-.46z"/></svg>
+                    </span>
+                  </a>
+                  <div class="min-w-0 title-wrap">
+                    <a class="track-title" href="{{ url_for('song_detail', song_id=s.id) }}">{{ s.title }}</a>
+                    <div class="track-sub">{{ 'Vocals' if s.coaching_type == 'vocals' else 'Guitar' }} &middot; {{ s.created_at.strftime("%b %d, %Y") }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="d-none d-md-table-cell">
+                <span class="pill {{ s.coaching_type }}">{{ 'Vocals' if s.coaching_type == 'vocals' else 'Guitar' }}</span>
+              </td>
+              <td class="d-none d-lg-table-cell text-secondary small">{{ s.created_at.strftime("%b %d, %Y") }}</td>
+              <td class="d-none d-sm-table-cell text-center mm">{{ s.attempts|length }}</td>
+              <td class="text-end">
+                {% set scored = s.attempts|rejectattr('overall', 'none')|list %}
+                {% if scored %}
+                  {% set top = scored|max(attribute='overall') %}
+                  <span class="best-num">{{ top.overall }}</span>
+                {% else %}
+                  <span class="text-muted">&ndash;</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if s.status == "done" %}
+                  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('practice', song_id=s.id) }}">Practice</a>
+                {% elif s.status == "separating" %}
+                  <span class="pill processing"><span class="spinner-border spinner-border-sm"></span> Processing</span>
+                {% elif s.status == "failed" %}
+                  <span class="pill failed">Failed</span>
+                {% else %}
+                  <span class="pill">Pending</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p id="no-match" class="text-secondary small mt-2" style="display: none">No songs match your filter.</p>
+  {% endif %}
+
+  <script>
+    const pending = document.querySelectorAll('[data-status="separating"]');
+
+    if (pending.length) {
+      const ids = [...pending].map((c) => c.dataset.song);
+
+      const tick = () => {
+        ids.forEach((id) => {
+          fetch(`/api/status/${id}`)
+            .then((r) => r.json())
+            .then((j) => {
+              if (j.status !== "separating") {
+                location.reload();
+              }
+            });
+        });
+      };
+
+      setInterval(tick, 4000);
+    }
+
+    const search = document.getElementById('song-search');
+
+    function applyFilters() {
+      const active = document.querySelector('.filter-btn.active');
+      const f = active ? active.dataset.filter : 'all';
+      const q = search ? search.value.trim().toLowerCase() : '';
+      let visible = 0;
+
+      document.querySelectorAll('.song-row').forEach((row) => {
+        const t = row.dataset.coaching || 'vocals';
+        const title = row.dataset.title || '';
+        const typeOk = (f === 'all' || t === f);
+        const textOk = (!q || title.includes(q));
+
+        row.style.display = (typeOk && textOk) ? '' : 'none';
+        if (typeOk && textOk) visible++;
+      });
+
+      const empty = document.getElementById('no-match');
+      if (empty) {
+        empty.style.display = visible === 0 ? '' : 'none';
+      }
+    }
+
+    document.querySelectorAll('.filter-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+      });
+    });
+
+    if (search) {
+      search.addEventListener('input', applyFilters);
+    }
+  </script>
+{% endblock %}

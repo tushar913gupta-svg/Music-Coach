@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+  <div class="auth-wrap">
+    <h1 class="am-title mb-3">Login</h1>
+
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label" for="username">Username</label>
+        <input id="username" name="username" class="form-control" required autocomplete="username">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="pw">Password</label>
+        <input type="password" name="password" id="pw" class="form-control" required autocomplete="current-password">
+      </div>
+
+      <div class="form-check mb-3">
+        <input type="checkbox" class="form-check-input" id="show-pw">
+        <label class="form-check-label small" for="show-pw">Show password</label>
+      </div>
+
+      <button class="btn btn-primary w-100" type="submit">Login</button>
+    </form>
+
+    <p class="small text-secondary mt-3 mb-0">
+      No account? <a href="{{ url_for('register') }}">Register</a>
+    </p>
+  </div>
+
+  <script>
+    const pw = document.getElementById('pw');
+    const show = document.getElementById('show-pw');
+    show.addEventListener('change', () => { pw.type = show.checked ? 'text' : 'password'; });
+  </script>
+{% endblock %}

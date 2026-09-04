@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}{{ song.title }}{% endblock %}
+
+{% block content %}
+  <a class="crumb" href="{{ url_for('index') }}">← Songs</a>
+
+  <div class="page-head">
+    <div class="min-w-0">
+      <h1 class="am-title">{{ song.title }}</h1>
+      <p class="am-subtitle mt-1 mb-0">
+        {{ 'Guitar' if song.coaching_type == 'guitar' else 'Vocals' }}
+        · {{ song.created_at.strftime("%b %d, %Y") }}
+        {% if song.duration %} · {{ "%.0f"|format(song.duration) }}s{% endif %}
+        {% if best is not none %} · best <span class="mm">{{ best }}</span>{% endif %}
+      </p>
+    </div>
+    {% if song.status == "done" %}
+      <a class="btn btn-primary btn-sm" href="{{ url_for('practice', song_id=song.id) }}">Practice</a>
+    {% endif %}
+  </div>
+
+  {% if song.status == "separating" %}
+    <p class="text-warning small"><span class="spinner-border spinner-border-sm"></span> Processing - refresh in a moment.</p>
+    <script>
+      setInterval(() => {
+        fetch('/api/status/{{ song.id }}')
+          .then((r) => r.json())
+          .then((j) => { if (j.status !== "separating") location.reload(); });
+      }, 3500);
+    </script>
+  {% endif %}
+
+  {% if song.status == "failed" %}
+    <p class="text-danger small">Failed{% if song.error %}: {{ song.error[:200] }}{% endif %}</p>
+  {% endif %}
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-12 col-lg-7">
+      {% if song.status == "done" %}
+        <div class="card mb-3">
+          <div class="card-body">
+            <p class="track-label">Reference - {{ song.reference_label }}</p>
+            {% if song.coaching_type == 'guitar' %}
+              <audio id="ref-audio" controls preload="metadata" src="{{ url_for('serve_stem', song_id=song.id, stem='guitar') }}" class="mb-3"></audio>
+            {% else %}
+              <audio id="ref-audio" controls preload="metadata" src="{{ url_for('serve_stem', song_id=song.id, stem='vocals') }}" class="mb-3"></audio>
+            {% endif %}
+
+            <p class="track-label">Backing</p>
+            <audio id="back-audio" controls preload="metadata" src="{{ url_for('serve_stem', song_id=song.id, stem='instrumental') }}"></audio>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <p class="section-label mb-0">Reference pitch</p>
+              <p id="ref-stats" class="text-secondary small mm mb-0"></p>
+            </div>
+            <div class="canvas-wrap" id="ref-scroll">
+              <canvas id="ref-canvas" height="200" style="width: 100%; height: 200px"></canvas>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <div class="card-body">
+          <p class="section-label mb-2">Progress</p>
+          {% if progress|length > 1 %}
+            <div class="canvas-wrap" style="overflow: hidden">
+              <canvas id="progress-canvas" height="140" style="width: 100%; height: 140px"></canvas>
+            </div>
+          {% else %}
+            <p class="text-secondary small mb-0">Need at least 2 takes to show progress.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <p class="section-label mb-0">Takes <span class="mm">{{ attempts|length }}</span></p>
+            {% if song.status == "done" %}
+              <a class="btn btn-sm btn-primary" href="{{ url_for('practice', song_id=song.id) }}">New take</a>
+            {% endif %}
+          </div>
+
+          <form method="post" action="{{ url_for('set_target', song_id=song.id) }}" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <span class="text-secondary small">Target</span>
+            <input name="target_score" type="number" min="0" max="100" class="form-control form-control-sm mm" style="width: 70px"
+                   placeholder="85" value="{{ song.target_score or '' }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Save</button>
+            {% if song.target_score and best is not none %}
+              {% if best >= song.target_score %}
+                <span class="text-success small">hit</span>
+              {% else %}
+                <span class="text-secondary small mm">{{ song.target_score - best }} to go</span>
+              {% endif %}
+            {% endif %}
+          </form>
+
+          {% if not attempts %}
+            <div class="flex-fill d-flex align-items-center justify-content-center text-center py-4">
+              <p class="text-secondary small mb-0">No takes yet.</p>
+            </div>
+          {% else %}
+            <div class="table-responsive takes-scroll">
+              <table class="table table-sm table-hover align-middle mb-0 track-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Pitch</th>
+                    <th>Oct</th>
+                    <th>Time</th>
+                    <th>Total</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for a in attempts %}
+                    <tr>
+                      <td class="small text-secondary">{{ a.created_at.strftime("%m-%d %H:%M") }}</td>
+                      <td class="mm">{{ a.pitch_score }}</td>
+                      <td class="mm">{{ a.octave_score }}</td>
+                      <td class="mm">{{ a.timing_score }}</td>
+                      <td class="mm fw-bold">{{ a.overall }}</td>
+                      <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('results', attempt_id=a.id) }}">View</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if user_albums %}
+        <form method="post" action="{{ url_for('albums_add') }}" class="d-flex flex-wrap gap-2 align-items-center mt-3">
+          <input type="hidden" name="song_id" value="{{ song.id }}">
+          <select name="album_id" class="form-select form-select-sm" style="max-width: 220px" required>
+            <option value="" selected disabled>Add to album…</option>
+            {% for a in user_albums %}
+              <option value="{{ a.id }}">{{ a.name }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" type="submit">Add</button>
+        </form>
+      {% endif %}
+
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-secondary text-truncate min-w-0 me-3">{{ song.filename }}</small>
+        <button class="btn btn-sm btn-outline-danger flex-shrink-0" type="button" data-bs-toggle="modal" data-bs-target="#deleteSongModal">Delete</button>
+      </div>
+
+      <div class="modal fade" id="deleteSongModal" tabindex="-1" aria-labelledby="deleteSongLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h1 class="modal-title fs-6" id="deleteSongLabel">Delete song?</h1>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p class="small text-secondary mb-0">“{{ song.title }}” and all of its takes will be permanently deleted.</p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <form method="post" action="{{ url_for('delete_song', song_id=song.id) }}" class="mb-0">
+                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const progressData = {{ progress|tojson }};
+
+    (function drawProgress() {
+      const c = document.getElementById('progress-canvas');
+      if (!c || !progressData || progressData.length < 2) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const w = c.parentElement.clientWidth || 600;
+      const h = 140;
+
+      c.style.width = w + 'px';
+      c.width = w * dpr;
+      c.height = h * dpr;
+      c.style.height = h + 'px';
+
+      const x = c.getContext('2d');
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const vals = progressData.map((p) => p.overall);
+      const min = Math.min(...vals, 0);
+      const max = Math.max(...vals, 100);
+      const pad = 24;
+      const px = (i) => pad + (i / (vals.length - 1)) * (w - pad * 2);
+      const py = (v) => h - pad - ((v - min) / Math.max(1, max - min)) * (h - pad * 2);
+
+      x.strokeStyle = '#2e2738';
+      x.lineWidth = 1;
+      for (let g = 0; g <= 4; g++) {
+        const y = pad + (g / 4) * (h - pad * 2);
+        x.beginPath();
+        x.moveTo(pad, y);
+        x.lineTo(w - pad, y);
+        x.stroke();
+      }
+
+      x.strokeStyle = '#e8a13c';
+      x.lineWidth = 1.5;
+      x.beginPath();
+      vals.forEach((v, i) => { i === 0 ? x.moveTo(px(i), py(v)) : x.lineTo(px(i), py(v)); });
+      x.stroke();
+
+      x.fillStyle = '#e8a13c';
+      vals.forEach((v, i) => {
+        x.beginPath();
+        x.arc(px(i), py(v), 2.5, 0, Math.PI * 2);
+        x.fill();
+      });
+
+      x.fillStyle = '#a79daf';
+      x.font = '10px ui-monospace, monospace';
+      x.fillText(progressData[0].date, pad, h - 6);
+      x.fillText(progressData[progressData.length - 1].date, w - pad - 30, h - 6);
+    })();
+  </script>
+
+  {% if song.status == "done" %}
+    <script>
+      async function loadRef() {
+        const s = document.getElementById('ref-stats');
+        try {
+          const r = await fetch('/api/reference_pitch/{{ song.id }}');
+          if (!r.ok) throw new Error();
+          const j = await r.json();
+          if (j.error) { s.textContent = j.error; return; }
+
+          const wrap = document.getElementById('ref-scroll');
+          const c = document.getElementById('ref-canvas');
+          if (!wrap || !c) return;
+
+          const ctx = c.getContext('2d');
+          const dpr = window.devicePixelRatio || 1;
+          const n = j.hz.length;
+          const w = Math.min(8000, Math.max(wrap.clientWidth || 700, Math.round(n * 1.1)));
+
+          c.style.width = w + 'px';
+          c.width = w * dpr;
+          c.height = 200 * dpr;
+          c.style.height = '200px';
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+          const W = w;
+          const H = 200;
+          const fmin = 32.7;
+          const fmax = 1016.6;
+          const toY = (hz) => H - ((Math.log2(hz / fmin) / Math.log2(fmax / fmin)) * H);
+          const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+          function draw(cur) {
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = '#13101a';
+            ctx.fillRect(0, 0, W, H);
+
+            for (let m = 24; m <= 84; m++) {
+              const hz = 440 * Math.pow(2, (m - 69) / 12);
+              if (hz < fmin || hz > fmax) continue;
+              const y = toY(hz);
+              const isC = m % 12 === 0;
+              ctx.strokeStyle = isC ? '#2e2738' : '#241e2c';
+              ctx.lineWidth = isC ? 1 : 0.5;
+              ctx.beginPath();
+              ctx.moveTo(0, y + 0.5);
+              ctx.lineTo(W, y + 0.5);
+              ctx.stroke();
+              if (isC) {
+                ctx.fillStyle = '#a79daf';
+                ctx.font = '10px system-ui';
+                ctx.fillText(names[m % 12] + (Math.floor(m / 12) - 1), 6, y - 4);
+              }
+            }
+
+            const hop = j.hop_time || 0.02;
+            ctx.fillStyle = '#a79daf';
+            ctx.font = '10px system-ui';
+            for (let sec = 0; sec < n * hop; sec += 5) {
+              const px = (sec / (n * hop)) * W;
+              ctx.fillText(Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0'), px + 4, 12);
+            }
+
+            ctx.strokeStyle = '#e8a13c';
+            ctx.lineWidth = 1.7;
+            ctx.beginPath();
+            let pen = false;
+            for (let i = 0; i < n; i++) {
+              const hz = j.hz[i];
+              const px = (i / n) * W;
+              if (!hz || j.conf[i] < 0.05) { pen = false; continue; }
+              const y = toY(Math.max(fmin, Math.min(fmax, hz)));
+              pen ? ctx.lineTo(px, y) : ctx.moveTo(px, y);
+              pen = true;
+            }
+            ctx.stroke();
+
+            if (cur !== null && cur !== undefined) {
+              ctx.strokeStyle = '#f1ebe2';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(cur, 0);
+              ctx.lineTo(cur, H);
+              ctx.stroke();
+            }
+          }
+
+          draw(null);
+          s.textContent = (n * (j.hop_time || 0.02)).toFixed(1) + 's';
+
+          const a = document.getElementById('ref-audio');
+          const b = document.getElementById('back-audio');
+
+          function curX() {
+            const e = (a && !a.paused) ? a : ((b && !b.paused) ? b : null);
+            if (!e || !e.duration || isNaN(e.duration)) return null;
+            return (e.currentTime / e.duration) * W;
+          }
+
+          function loop() {
+            const pos = curX();
+            if (pos !== null) {
+              try { wrap.scrollLeft = Math.max(0, pos - wrap.clientWidth / 2); } catch(e) {}
+              draw(pos);
+            } else {
+              draw(null);
+            }
+            requestAnimationFrame(loop);
+          }
+
+          loop();
+        } catch (e) {
+          const el = document.getElementById('ref-stats');
+          if (el) el.textContent = 'Could not load pitch';
+        }
+      }
+
+      loadRef();
+    </script>
+  {% endif %}
+{% endblock %}

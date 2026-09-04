@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}{{ album.name }}{% endblock %}
+
+{% block content %}
+  <a class="crumb" href="{{ url_for('index') }}">← Songs</a>
+
+  <div class="page-head">
+    <div class="min-w-0">
+      <h1 class="am-title">{{ album.name }}</h1>
+      <div class="am-subtitle mt-1">{{ songs|length }} song{{ '' if songs|length == 1 else 's' }}</div>
+    </div>
+    <div>
+      <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteAlbumModal">Delete album</button>
+    </div>
+  </div>
+
+  <div class="modal fade" id="deleteAlbumModal" tabindex="-1" aria-labelledby="deleteAlbumLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h1 class="modal-title fs-6" id="deleteAlbumLabel">Delete album?</h1>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-secondary mb-0">“{{ album.name }}” will be deleted. Its songs stay in your library.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <form method="post" action="{{ url_for('delete_album', album_id=album.id) }}" class="mb-0">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if all_songs %}
+    <form method="post" action="{{ url_for('albums_add') }}" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <input type="hidden" name="album_id" value="{{ album.id }}">
+      <select name="song_id" class="form-select form-select-sm" style="max-width: 280px" required>
+        <option value="" selected disabled>Add a song…</option>
+        {% for s in all_songs %}
+          {% if s not in songs %}
+            <option value="{{ s.id }}">{{ s.title }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" type="submit">Add</button>
+    </form>
+  {% endif %}
+
+  {% if not songs %}
+    <p class="text-secondary small">This album is empty. Add songs from here or from any song page.</p>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 track-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th class="d-none d-md-table-cell">Part</th>
+            <th class="d-none d-lg-table-cell">Added</th>
+            <th class="text-end">Best</th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in songs %}
+            <tr>
+              <td>
+                <div class="d-flex align-items-center gap-3">
+                  <a class="am-art-link" href="{{ url_for('song_detail', song_id=s.id) }}" aria-label="{{ s.title }}">
+                    <span class="am-art">
+                      <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M9 1.5v8.44a3.5 3.5 0 1 0 2 3.16V7.4l3-1.28V3.1L9 5.28V1.5a.5.5 0 0 0-1 0v.46a.5.5 0 0 0 1-.46z"/></svg>
+                    </span>
+                  </a>
+                  <div class="min-w-0 title-wrap">
+                    <a class="track-title" href="{{ url_for('song_detail', song_id=s.id) }}">{{ s.title }}</a>
+                    <div class="track-sub">{{ 'Vocals' if s.coaching_type == 'vocals' else 'Guitar' }} &middot; {{ s.created_at.strftime("%b %d, %Y") }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="d-none d-md-table-cell">
+                <span class="pill {{ s.coaching_type }}">{{ 'Vocals' if s.coaching_type == 'vocals' else 'Guitar' }}</span>
+              </td>
+              <td class="d-none d-lg-table-cell text-secondary small">{{ s.created_at.strftime("%b %d, %Y") }}</td>
+              <td class="text-end">
+                {% set scored = s.attempts|rejectattr('overall', 'none')|list %}
+                {% if scored %}
+                  {% set top = scored|max(attribute='overall') %}
+                  <span class="best-num">{{ top.overall }}</span>
+                {% else %}
+                  <span class="text-muted">&ndash;</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-flex gap-2 justify-content-end">
+                  {% if s.status == "done" %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('practice', song_id=s.id) }}">Practice</a>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('album_remove', album_id=album.id) }}" class="mb-0">
+                    <input type="hidden" name="song_id" value="{{ s.id }}">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">Remove</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

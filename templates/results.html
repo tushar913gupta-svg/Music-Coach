@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Take {{ attempt.id }} - {{ song.title }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <div class="min-w-0">
+      <h1 class="am-title">{{ song.title }}</h1>
+      <p class="am-subtitle mt-1 mb-0">Take {{ attempt.id }} · {{ attempt.created_at.strftime("%b %d, %Y %H:%M") }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('song_detail', song_id=song.id) }}">All takes</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('practice', song_id=song.id) }}">Record again</a>
+    </div>
+  </div>
+
+  <div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col">
+      <div class="card text-center py-3">
+        <div class="score-num">{{ attempt.pitch_score }}</div>
+        <small class="score-cap">Pitch</small>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card text-center py-3">
+        <div class="score-num">{{ attempt.octave_score }}</div>
+        <small class="score-cap">Octave</small>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card text-center py-3">
+        <div class="score-num">{{ attempt.timing_score }}</div>
+        <small class="score-cap">Timing{% if not attempt.timing_reliable %}*{% endif %}</small>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card text-center py-3">
+        <div class="score-num">{{ attempt.overall }}{% if is_best %} <span class="best-tag">best</span>{% endif %}</div>
+        <small class="score-cap">Total</small>
+      </div>
+    </div>
+  </div>
+  <p class="text-secondary small mb-3">{% if not attempt.timing_reliable %}*rough timing. {% endif %}{% if best is not none and not is_best %}Best for this song: <span class="mm">{{ best }}</span>.{% endif %}</p>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <p class="section-label mb-3">Recordings</p>
+
+          <p class="track-label">Your take</p>
+          <audio id="rec-audio" controls src="{{ url_for('serve_recording', attempt_id=attempt.id) }}" class="mb-3"></audio>
+
+          <p class="track-label">Reference</p>
+          {% if song.coaching_type == 'guitar' %}
+            <audio id="ref-audio-r" controls src="{{ url_for('serve_stem', song_id=song.id, stem='guitar') }}" class="mb-3"></audio>
+          {% else %}
+            <audio id="ref-audio-r" controls src="{{ url_for('serve_stem', song_id=song.id, stem='vocals') }}" class="mb-3"></audio>
+          {% endif %}
+
+          <p class="track-label">Backing</p>
+          <audio controls src="{{ url_for('serve_stem', song_id=song.id, stem='instrumental') }}"></audio>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card mb-3">
+        <div class="card-body">
+          <p class="section-label mb-2">Breakdown</p>
+
+          <table class="table table-sm mb-0">
+            <tr>
+              <th style="width: 110px">Pitch</th>
+              <td class="small">{{ "%.1f"|format(attempt.median_cents) }} cents off median</td>
+            </tr>
+            <tr>
+              <th>Timing</th>
+              <td class="small">{{ "%.0f"|format(attempt.median_onset) }} ms median</td>
+            </tr>
+            <tr>
+              <th>Tempo</th>
+              <td class="small">{{ "%.0f"|format(attempt.tempo_ref) }} vs {{ "%.0f"|format(attempt.tempo_rec) }} bpm</td>
+            </tr>
+            <tr>
+              <th>Voiced</th>
+              <td class="small">{{ attempt.voiced_frames }} frames</td>
+            </tr>
+          </table>
+
+          {% if attempt.issues %}
+            <hr class="my-2">
+            <ul class="list-unstyled mb-0 issue-list">
+              {% for iss in attempt.issues %}
+                <li class="small py-1">{{ iss }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <p class="section-label mb-2">Other takes</p>
+          {% if not history %}
+            <p class="text-secondary small mb-0">No other takes.</p>
+          {% else %}
+            <table class="table table-sm table-hover mb-0">
+              <tbody>
+                {% for h in history %}
+                  <tr>
+                    <td class="small text-secondary">{{ h.created_at.strftime("%m-%d %H:%M") }}</td>
+                    <td class="fw-bold">{{ h.overall }}</td>
+                    <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('results', attempt_id=h.id) }}">View</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+
+          <div class="mt-3">
+            <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteTakeModal">Delete this take</button>
+          </div>
+
+          <div class="modal fade" id="deleteTakeModal" tabindex="-1" aria-labelledby="deleteTakeLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h1 class="modal-title fs-6" id="deleteTakeLabel">Delete take?</h1>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <p class="small text-secondary mb-0">Take {{ attempt.id }} and its recording will be permanently deleted.</p>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <form method="post" action="{{ url_for('delete_take', attempt_id=attempt.id) }}" class="mb-0">
+                    <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="section-label mb-0">Pitch</p>
+        <div class="legend">
+          <span><span class="dot dot-ref"></span>Reference</span>
+          <span><span class="dot dot-you"></span>You</span>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="compare-scroll">
+        <canvas id="compare-canvas" height="360" style="width: 100%; height: 360px"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ATTEMPT_ID = {{ attempt.id }};
+    const SONG_ID = {{ song.id }};
+
+    async function loadBoth() {
+      try {
+        const [r1, r2] = await Promise.all([
+          fetch('/api/reference_pitch/' + SONG_ID).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/recording/' + ATTEMPT_ID).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+        ]);
+
+        const ref = r1;
+        const rec = r2;
+        const wrap = document.getElementById('compare-scroll');
+        const c = document.getElementById('compare-canvas');
+        if (!wrap || !c) return;
+
+        const ctx = c.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const n = Math.max(ref.hz ? ref.hz.length : 0, rec.hz ? rec.hz.length : 0);
+        if (!n) return;
+
+        const w = Math.min(8000, Math.max(wrap.clientWidth || 900, Math.round(n * 1.1)));
+        c.style.width = w + 'px';
+        c.width = w * dpr;
+        c.height = 360 * dpr;
+        c.style.height = '360px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const W = w;
+        const H = 360;
+        const fmin = 32.7;
+        const fmax = 1016.6;
+        const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+        const toY = (hz) => H - ((Math.log2(hz / fmin) / Math.log2(fmax / fmin)) * H);
+
+        function clear(cur) {
+          ctx.clearRect(0, 0, W, H);
+          ctx.fillStyle = '#13101a';
+          ctx.fillRect(0, 0, W, H);
+
+          for (let m = 24; m <= 84; m++) {
+            const hz = 440 * Math.pow(2, (m - 69) / 12);
+            if (hz < fmin || hz > fmax) continue;
+            const y = toY(hz);
+            const isC = m % 12 === 0;
+            ctx.strokeStyle = isC ? '#2e2738' : '#241e2c';
+            ctx.lineWidth = isC ? 1 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, y + 0.5);
+            ctx.lineTo(W, y + 0.5);
+            ctx.stroke();
+            if (isC) {
+              ctx.fillStyle = '#a79daf';
+              ctx.font = '10px system-ui';
+              ctx.fillText(names[m % 12] + (Math.floor(m / 12) - 1), 6, y - 4);
+            }
+          }
+
+          ctx.fillStyle = '#a79daf';
+          ctx.font = '10px system-ui';
+          for (let s = 0; s < n * 0.02; s += 5) {
+            const px = (s / (n * 0.02)) * W;
+            ctx.fillText(Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'), px + 4, 12);
+          }
+
+          if (cur !== null && cur !== undefined) {
+            ctx.strokeStyle = '#f1ebe2';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cur, 0);
+            ctx.lineTo(cur, H);
+            ctx.stroke();
+          }
+        }
+
+        function draw(data, col, lw) {
+          if (!data || !data.hz) return;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = lw;
+          ctx.beginPath();
+          let pen = false;
+          for (let i = 0; i < data.hz.length; i++) {
+            if (!data.hz[i] || (data.conf ? data.conf[i] : 0) < 0.05) { pen = false; continue; }
+            const px = (i / n) * W;
+            const y = toY(Math.max(fmin, Math.min(fmax, data.hz[i])));
+            pen ? ctx.lineTo(px, y) : ctx.moveTo(px, y);
+            pen = true;
+          }
+          ctx.stroke();
+        }
+
+        function paint(cur) {
+          clear(cur);
+          draw(ref, '#e8a13c', 1.6);
+          draw(rec, '#4fc3b6', 1.8);
+        }
+
+        paint(null);
+
+        const ra = document.getElementById('ref-audio-r');
+        const ea = document.getElementById('rec-audio');
+
+        function getX() {
+          const a = (ea && !ea.paused) ? ea : ((ra && !ra.paused) ? ra : null);
+          if (!a || !a.duration || isNaN(a.duration)) return null;
+          return (a.currentTime / (n * 0.02)) * W;
+        }
+
+        function loop() {
+          try {
+            const cur = getX();
+            if (cur === null) { paint(null); return; }
+            try { wrap.scrollLeft = Math.max(0, cur - wrap.clientWidth / 2); } catch(e) {}
+            paint(cur);
+          } catch(e) {}
+          requestAnimationFrame(loop);
+        }
+
+        loop();
+
+        [ra, ea].forEach((a) => {
+          if (a) {
+            a.addEventListener('seeked', () => { try { paint(getX()); } catch(e) {} });
+            a.addEventListener('timeupdate', () => { try { paint(getX()); } catch(e) {} });
+          }
+        });
+      } catch(e) {}
+    }
+
+    loadBoth();
+  </script>
+{% endblock %}

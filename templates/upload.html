@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Upload{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-5">
+      <a class="crumb" href="{{ url_for('index') }}">← Songs</a>
+      <h1 class="am-title mb-1">Upload</h1>
+      <p class="am-subtitle mt-0 mb-3">Add a track to start practicing</p>
+
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label" for="title">Title <span class="text-secondary">(optional)</span></label>
+          <input id="title" name="title" class="form-control" placeholder="Song name">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label d-block">Part</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="coaching_type" value="vocals" id="c1" checked>
+            <label class="btn btn-outline-secondary" for="c1">Vocals</label>
+            <input type="radio" class="btn-check" name="coaching_type" value="guitar" id="c2">
+            <label class="btn btn-outline-secondary" for="c2">Guitar</label>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="file">File</label>
+          <input type="file" name="file" id="file" class="form-control" accept=".mp3,.wav,.flac,.m4a,.ogg,.webm" required>
+          <p id="file-meta" class="form-text mt-1">mp3, wav, flac, m4a, ogg, webm - max 150 MB</p>
+        </div>
+
+        <button class="btn btn-primary w-100" type="submit">Upload</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const fi = document.getElementById('file');
+    const meta = document.getElementById('file-meta');
+
+    if (fi) {
+      fi.addEventListener('change', () => {
+        if (fi.files && fi.files[0]) {
+          const mb = (fi.files[0].size / 1024 / 1024).toFixed(1);
+          meta.textContent = fi.files[0].name + ' - ' + mb + ' MB';
+        }
+      });
+    }
+  </script>
+{% endblock %}

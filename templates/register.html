@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+  <div class="auth-wrap">
+    <h1 class="am-title mb-3">Register</h1>
+
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label" for="username">Username</label>
+        <input id="username" name="username" class="form-control" required autocomplete="username">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="email">Email <span class="text-secondary">(optional)</span></label>
+        <input id="email" name="email" type="email" class="form-control" autocomplete="email">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="pw1">Password</label>
+        <input type="password" name="password" id="pw1" class="form-control" required autocomplete="new-password">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="pw2">Confirm password</label>
+        <input type="password" name="password2" id="pw2" class="form-control" required autocomplete="new-password">
+      </div>
+
+      <div class="form-check mb-3">
+        <input type="checkbox" class="form-check-input" id="show-pw">
+        <label class="form-check-label small" for="show-pw">Show passwords</label>
+      </div>
+
+      <button class="btn btn-primary w-100" type="submit">Create account</button>
+    </form>
+
+    <p class="small text-secondary mt-3 mb-0">
+      Have an account? <a href="{{ url_for('login') }}">Login</a>
+    </p>
+  </div>
+
+  <script>
+    const pw1 = document.getElementById('pw1');
+    const pw2 = document.getElementById('pw2');
+    const show = document.getElementById('show-pw');
+    show.addEventListener('change', () => {
+      const t = show.checked ? 'text' : 'password';
+      pw1.type = t;
+      pw2.type = t;
+    });
+  </script>
+{% endblock %}
